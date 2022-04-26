@@ -14,6 +14,35 @@ namespace Examples
 
 		public static bool Verbose = false;
 
+		static string PrintZFrame(string format, ZFrame frame, params object[] data)
+		{
+			var renderer = new StringBuilder();
+
+			var list = new List<object>(data);
+
+			// here the renderer
+
+			renderer.Append(format);
+			renderer.Append(": ");
+			renderer.Append("{");
+			renderer.Append(0 + data.Length);
+			renderer.Append("}");
+
+			// now the message
+
+			frame.Position = 0;
+
+			if (frame.Length == 0)
+				list.Add("EMPTY");
+			else
+				list.Add(frame.ReadString());
+
+			frame.Position = 0;
+
+			string res = String.Format(renderer.ToString(), list.ToArray());
+			return res;
+		}
+		
 		static void Console_WriteZFrame(string format, ZFrame frame, params object[] data)
 		{
 			var renderer = new StringBuilder();

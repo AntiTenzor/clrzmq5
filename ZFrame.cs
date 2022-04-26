@@ -62,6 +62,9 @@ namespace ZeroMQ
 
 		private DispoIntPtr framePtr;
 
+        /// <summary>
+        /// Length of payload (in bytes)
+        /// </summary>
 		private int length;
 
 		private int position;
@@ -277,6 +280,9 @@ namespace ZeroMQ
 			}
 		}
 
+        /// <summary>
+        /// Length of payload (in bytes)
+        /// </summary>
 		public override long Length
 		{
 			get
@@ -302,6 +308,9 @@ namespace ZeroMQ
 
 		public IntPtr Ptr { get { return framePtr; } }
 
+        /// <summary>
+        /// Native pointer to PAYLOAD in unmanaged memory
+        /// </summary>
 		public IntPtr DataPtr()
 		{
 			if (framePtr == IntPtr.Zero)
@@ -337,7 +346,8 @@ namespace ZeroMQ
 		public byte[] Read(int count)
 		{
 			int remaining = Math.Min(count, Math.Max(0, (int)(Length - position)));
-			if (remaining == 0) {
+			if (remaining == 0)
+            {
 				return new byte[0];
 			}
 			if (remaining < 0)
@@ -349,10 +359,14 @@ namespace ZeroMQ
 			return bytes;
 		}
 
+        /// <summary>
+        /// WARNING: this method returns 'remaining', not the amount of bytes received.
+        /// </summary>
 		public override int Read(byte[] buffer, int offset, int count)
 		{
 			int remaining = Math.Min(count, Math.Max(0, (int)(Length - position)));
-			if (remaining == 0) {
+			if (remaining == 0)
+            {
 				return 0;
 			}
 			if (remaining < 0)
@@ -747,6 +761,11 @@ namespace ZeroMQ
 			throw new NotSupportedException();
 		}
 
+        /// <summary>
+        /// Is it the best way to free resources?
+        /// It calls unmanaged msg_close(framePtr)
+        /// and calls framePtr.Dispose().
+        /// </summary>
 		public override void Close()
 		{
 			if (framePtr == null)

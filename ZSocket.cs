@@ -525,7 +525,8 @@ namespace ZeroMQ
 			error = default(ZError);
 			flags = flags | ZSocketFlags.More;
 
-			do {
+			do
+            {
 				var frame = ZFrame.CreateEmpty();
 
 				if (framesToReceive == 1) 
@@ -558,7 +559,69 @@ namespace ZeroMQ
 			return true;
 		}
 
-		public virtual void Send(ZMessage msg) {
+        public List<byte[]> ReceivePayloads(int framesToReceive, ZSocketFlags flags, out ZError error)
+        {
+            List<byte[]> payloads = null;
+            while (!TryReceivePayloads(ref framesToReceive, ref payloads, flags, out error))
+            {
+                if (error == ZError.EAGAIN && ((flags & ZSocketFlags.DontWait) == ZSocketFlags.DontWait))
+                {
+                    break;
+                }
+                return null;
+            }
+            return payloads;
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        public bool TryReceivePayloads(ref int framesToReceive, ref List<byte[]> frames, ZSocketFlags flags, out ZError error)
+        {
+            EnsureNotDisposed();
+
+            error = default(ZError);
+            flags = flags | ZSocketFlags.More;
+
+            do
+            {
+                if (framesToReceive == 1)
+                {
+                    flags = flags & ~ZSocketFlags.More;
+                }
+
+                using (var frame = ZFrame.CreateEmpty())
+                {
+                    while (-1 == zmq.msg_recv(frame.Ptr, _socketPtr, (int)flags))
+                    {
+                        error = ZError.GetLastErr();
+
+                        if (error == ZError.EINTR)
+                        {
+                            error = default(ZError);
+                            continue;
+                        }
+
+                        frame.Dispose();
+                        return false;
+                    }
+
+                    if (frames == null)
+                    {
+                        frames = new List<byte[]>();
+                    }
+                    // Read payload to a regular managed array
+                    byte[] payload = frame.Read();
+                    frames.Add(payload);
+
+                    frame.Close();
+                }
+            } while (--framesToReceive > 0 && this.ReceiveMore);
+
+            return true;
+        }
+
+        public virtual void Send(ZMessage msg) {
 			SendMessage(msg);
 		} // just Send*
 		public virtual bool Send(ZMessage msg, out ZError error) {
