@@ -55,6 +55,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Platform\Platform.__Internal.cs" />
+    <Compile Include="UBuffer.cs" />
     <Compile Include="ZAuth.cs" />
     <Compile Include="ZCert.cs" />
     <Compile Include="ZCertStore.cs" />
@@ -62,6 +63,7 @@
     <Compile Include="Monitoring\ZMonitors.cs" />
     <Compile Include="Z85.cs" />
     <Compile Include="ZActor.cs" />
+    <Compile Include="UFrame.cs" />
     <Compile Include="ZFrameOption.cs" />
     <Compile Include="ZThread.cs" />
     <Compile Include="ZSocketSetup.cs" />
