@@ -11,7 +11,8 @@
     <RootNamespace>ZGuideExamples</RootNamespace>
     <AssemblyName>ZGuideExamples</AssemblyName>
     <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
-    <TargetFrameworkProfile></TargetFrameworkProfile>
+    <TargetFrameworkProfile>
+    </TargetFrameworkProfile>
     <FileAlignment>512</FileAlignment>
     <PublishUrl>publish\</PublishUrl>
     <Install>true</Install>
@@ -39,6 +40,7 @@
     <CodeAnalysisIgnoreBuiltInRuleSets>true</CodeAnalysisIgnoreBuiltInRuleSets>
     <CodeAnalysisIgnoreBuiltInRules>true</CodeAnalysisIgnoreBuiltInRules>
     <CodeAnalysisFailOnMissingRules>true</CodeAnalysisFailOnMissingRules>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|AnyCPU'">
     <OutputPath>..\bin\Release\</OutputPath>
@@ -49,6 +51,7 @@
     <CodeAnalysisIgnoreBuiltInRuleSets>false</CodeAnalysisIgnoreBuiltInRuleSets>
     <CodeAnalysisIgnoreBuiltInRules>false</CodeAnalysisIgnoreBuiltInRules>
     <CodeAnalysisFailOnMissingRules>true</CodeAnalysisFailOnMissingRules>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="System" />
@@ -84,6 +87,9 @@
     <Compile Include="mdp.cs" />
     <Compile Include="mdworker.cs" />
     <Compile Include="mdwrkapi.cs" />
+    <Compile Include="rtdealermemleak2.cs" />
+    <Compile Include="rtdealermemleak.cs" />
+    <Compile Include="rtdealergc.cs" />
     <Compile Include="ticlient.cs" />
     <Compile Include="msgqueue.cs" />
     <Compile Include="mspoller.cs" />
@@ -157,12 +163,10 @@
   <Target Name="AfterBuild">
   </Target>
   -->
-
   <ItemGroup>
     <ProjectReference Include="..\ZeroMQ.vs.csproj">
       <Project>{6FFD872F-A4A4-4EFA-9B4D-4342BA6CF250}</Project>
       <Name>ZeroMQ.vs</Name>
     </ProjectReference>
   </ItemGroup>
-
 </Project>

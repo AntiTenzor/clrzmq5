@@ -399,10 +399,49 @@ namespace ZeroMQ
 			return true;
 		}
 
-		/// <summary>
-		/// Sends HARD bytes from a byte[n]. Please don't use SendBytes, use instead SendFrame.
-		/// </summary>
-		public bool Send(byte[] buffer, int offset, int count) {
+        /// <summary>
+        /// Sends HARD bytes from a byte[n]. Please don't use SendBytes, use instead SendFrame.
+        /// </summary>
+        public bool SendBytesUnsafe(byte[] buffer, ZSocketFlags flags, out ZError error)
+        {
+            EnsureNotDisposed();
+
+            error = ZError.None;
+
+            // int zmq_send (void *socket, void *buf, size_t len, int flags);
+
+            //var pin = GCHandle.Alloc(buffer, GCHandleType.Pinned);
+            //IntPtr pinPtr = pin.AddrOfPinnedObject() + offset;
+
+            unsafe
+            {
+                fixed (byte* pinPtr = buffer)
+                {
+                    int length;
+                    while (-1 == (length = zmq.send(SocketPtr, (IntPtr)pinPtr, buffer.Length, (int)flags)))
+                    {
+                        error = ZError.GetLastErr();
+
+                        if (error == ZError.EINTR)
+                        {
+                            error = default(ZError);
+                            continue;
+                        }
+
+                        //pin.Free();
+                        return false;
+                    }
+                }
+            }
+
+            //pin.Free();
+            return true;
+        }
+
+        /// <summary>
+        /// Sends HARD bytes from a byte[n]. Please don't use SendBytes, use instead SendFrame.
+        /// </summary>
+        public bool Send(byte[] buffer, int offset, int count) {
 			return SendBytes(buffer, offset, count);
 		} // just Send*
 		/// <summary>
@@ -558,6 +597,54 @@ namespace ZeroMQ
 
 			return true;
 		}
+        public bool ReceiveArrays(ref int framesToReceive,
+    ref Queue<byte[]> frames, ZSocketFlags flags, out ZError error)
+        {
+            EnsureNotDisposed();
+
+            error = default(ZError);
+            flags = flags | ZSocketFlags.More;
+
+            do
+            {
+                var frame = ZFrame.CreateEmpty();
+
+                if (framesToReceive == 1)
+                {
+                    flags = flags & ~ZSocketFlags.More;
+                }
+
+                while (-1 == zmq.msg_recv(frame.Ptr, _socketPtr, (int)flags))
+                {
+                    error = ZError.GetLastErr();
+
+                    if (error == ZError.EINTR)
+                    {
+                        error = default(ZError);
+                        continue;
+                    }
+                    else
+                    {
+                        frame.Dispose();
+                        return false;
+                    }
+                }
+
+                if (frames == null)
+                {
+                    frames = new Queue<byte[]>();
+                }
+
+                // Read payload to a regular managed array
+                byte[] buf = frame.Read();
+                frames.Enqueue(buf);
+
+                // Free resources??? It looks we should use Close() instead.
+                frame.Dispose();
+            } while (--framesToReceive > 0 && this.ReceiveMore);
+
+            return true;
+        }
 
         public List<byte[]> ReceivePayloads(int framesToReceive, ZSocketFlags flags, out ZError error)
         {
@@ -614,6 +701,73 @@ namespace ZeroMQ
                     byte[] payload = frame.Read();
                     frames.Add(payload);
 
+                    // Is it the best way to free unmanaged memory?
+                    frame.Close();
+                }
+            } while (--framesToReceive > 0 && this.ReceiveMore);
+
+            return true;
+        }
+
+        /// <summary>
+        /// TODO: добавить передачу Encoding?
+        /// </summary>
+        public List<string> ReceivePayloadStrings(int framesToReceive, ZSocketFlags flags, out ZError error)
+        {
+            List<string> payloads = null;
+            while (!TryReceivePayloads(ref framesToReceive, ref payloads, flags, out error))
+            {
+                if (error == ZError.EAGAIN && ((flags & ZSocketFlags.DontWait) == ZSocketFlags.DontWait))
+                {
+                    break;
+                }
+                return null;
+            }
+            return payloads;
+        }
+
+        /// <summary>
+        /// TODO: добавить передачу Encoding?
+        /// </summary>
+        public bool TryReceivePayloads(ref int framesToReceive, ref List<string> frames, ZSocketFlags flags, out ZError error)
+        {
+            EnsureNotDisposed();
+
+            error = default(ZError);
+            flags = flags | ZSocketFlags.More;
+
+            do
+            {
+                if (framesToReceive == 1)
+                {
+                    flags = flags & ~ZSocketFlags.More;
+                }
+
+                using (var frame = ZFrame.CreateEmpty())
+                {
+                    while (-1 == zmq.msg_recv(frame.Ptr, _socketPtr, (int)flags))
+                    {
+                        error = ZError.GetLastErr();
+
+                        if (error == ZError.EINTR)
+                        {
+                            error = default(ZError);
+                            continue;
+                        }
+
+                        frame.Dispose();
+                        return false;
+                    }
+
+                    if (frames == null)
+                    {
+                        frames = new List<string>();
+                    }
+                    // Read payload to a regular managed array
+                    string payload = frame.ReadString();
+                    frames.Add(payload);
+
+                    // Is it the best way to free unmanaged memory?
                     frame.Close();
                 }
             } while (--framesToReceive > 0 && this.ReceiveMore);

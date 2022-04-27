@@ -58,6 +58,9 @@ namespace ZeroMQ
 
 		public const int DefaultFrameSize = 4096;
 
+        /// <summary>
+        /// Minimum frame size is 64 bytes (zmq.sizeof_zmq_msg_t)
+        /// </summary>
 		public static readonly int MinimumFrameSize = zmq.sizeof_zmq_msg_t;
 
 		private DispoIntPtr framePtr;
@@ -360,7 +363,7 @@ namespace ZeroMQ
 		}
 
         /// <summary>
-        /// WARNING: this method returns 'remaining', not the amount of bytes received.
+        /// WARNING: this method returns 'remaining', not the amount of bytes received?
         /// </summary>
 		public override int Read(byte[] buffer, int offset, int count)
 		{

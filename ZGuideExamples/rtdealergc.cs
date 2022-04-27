@@ -11,9 +11,9 @@ namespace Examples
 {
 	static partial class Program
 	{
-		static int RTDealer_Workers = 10;
+		static int RTDealerGC_Workers = 10;
 
-		public static void RTDealer(string[] args)
+		public static void RTDealerGC(string[] args)
 		{
 			//
 			// ROUTER-to-DEALER example
@@ -33,10 +33,10 @@ namespace Examples
 
 				broker.Bind("tcp://*:5671");
 
-				for (int i = 0; i < RTDealer_Workers; ++i)
+				for (int i = 0; i < RTDealerGC_Workers; ++i)
 				{
 					int j = i;
-					new Thread(() => RTDealer_Worker(j)).Start();
+					new Thread(() => RTDealerGC_Worker(j)).Start();
 				}
 
 				var stopwatch = new Stopwatch();
@@ -51,9 +51,8 @@ namespace Examples
 					//using (ZMessage zmsg = broker.ReceiveMessage())
 					int maxFramesToGet = 100;
 					frames.Clear();
-                    //if (broker.ReceiveArrays(ref maxFramesToGet, ref frames, ZSocketFlags.None, out ZError readErr))
-                    if (broker.ReceiveArrays(ref maxFramesToGet, ref frames, ZSocketFlags.None, out ZError readErr))
-                    {
+					if (broker.ReceiveArrays(ref maxFramesToGet, ref frames, ZSocketFlags.None, out ZError readErr))
+					{
 						int frameCount = frames.Count;
 						//string id = zmsg.PopString();
 						string id = Encoding.UTF8.GetString(frames.Dequeue());
@@ -100,6 +99,8 @@ namespace Examples
 							}
 						}
 
+						//GC.Collect(1, GCCollectionMode.Forced, true, true);
+						
 						Console.WriteLine();
 						
 						//zmsg.Dismiss();
@@ -108,7 +109,7 @@ namespace Examples
 			}
 		}
 
-		static void RTDealer_Worker(int i)
+		static void RTDealerGC_Worker(int i)
 		{
 			using (var context = new ZContext())
 			using (var worker = new ZSocket(context, ZSocketType.DEALER))
@@ -134,8 +135,8 @@ namespace Examples
 					using (ZMessage zmsg = worker.ReceiveMessage())
 					{
 						msg = zmsg.PopString();
-                        zmsg.Dismiss();
-                    }
+						zmsg.Dismiss();
+					}
 
 					bool finished = "Fired!".Equals(msg, StringComparison.InvariantCultureIgnoreCase);
 
@@ -148,7 +149,10 @@ namespace Examples
 						total++;
 
 						// Do some random work
-						Thread.Sleep(3);
+						if (total % 5 == 0)
+							Thread.Sleep(333);
+						else	
+							Thread.Sleep(3);
 
 						byte[] payload = new byte[1 * 1024*1024];
 						if (!worker.SendBytes(payload, 0, payload.Length, ZSocketFlags.DontWait, out ZError error))

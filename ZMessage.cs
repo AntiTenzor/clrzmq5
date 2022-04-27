@@ -131,14 +131,14 @@ namespace ZeroMQ
 
 		public ZFrame Pop()
 		{
-			var result = RemoveAt(0, false);
+            ZFrame result = RemoveAt(0, false);
 		    result.Position = 0; // TODO maybe remove this here again, see https://github.com/zeromq/clrzmq4/issues/110
             return result;
 		}
 
 		public int PopBytes(byte[] buffer, int offset, int count)
 		{
-			using (var frame = Pop())
+			using (ZFrame frame = Pop())
 			{
 				return frame.Read(buffer, offset, count);
 			}
@@ -223,9 +223,11 @@ namespace ZeroMQ
 
 		public String PopString(Encoding encoding)
 		{
-			using (var frame = Pop())
+			using (ZFrame frame = Pop())
 			{
-				return frame.ReadString((int)frame.Length, encoding);
+				string res = frame.ReadString((int)frame.Length, encoding);
+                frame.Close();
+                return res;
 			}
 		}
 
