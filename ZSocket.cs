@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -402,11 +403,13 @@ namespace ZeroMQ
         /// <summary>
         /// Sends HARD bytes from a byte[n]. Please don't use SendBytes, use instead SendFrame.
         /// </summary>
-        public bool SendBytesUnsafe(byte[] buffer, ZSocketFlags flags, out ZError error)
+        public bool SendBytesUnsafe(byte[] buffer, int count, ZSocketFlags flags, out ZError error)
         {
             EnsureNotDisposed();
 
             error = ZError.None;
+			if (count < 0)
+				count = 0;
 
             // int zmq_send (void *socket, void *buf, size_t len, int flags);
 
@@ -418,7 +421,53 @@ namespace ZeroMQ
                 fixed (byte* pinPtr = buffer)
                 {
                     int length;
-                    while (-1 == (length = zmq.send(SocketPtr, (IntPtr)pinPtr, buffer.Length, (int)flags)))
+					int safeCount = Math.Min(count, buffer.Length);
+                    while (-1 == (length = zmq.send(SocketPtr, (IntPtr)pinPtr, safeCount /* buffer.Length */, (int)flags)))
+                    {
+                        error = ZError.GetLastErr();
+
+                        if (error == ZError.EINTR)
+                        {
+                            error = default(ZError);
+                            continue;
+                        }
+
+                        //pin.Free();
+                        return false;
+                    }
+                }
+            }
+
+            //pin.Free();
+            return true;
+        }
+
+        /// <summary>
+        /// Sends HARD bytes from a byte[n]. Please don't use SendBytes, use instead SendFrame.
+        /// </summary>
+        public bool SendUms(UnmanagedMemoryStream buffer, int count, ZSocketFlags flags, out ZError error)
+        {
+            EnsureNotDisposed();
+
+            error = ZError.None;
+            if (count < 0)
+                count = 0;
+
+            // int zmq_send (void *socket, void *buf, size_t len, int flags);
+
+            //var pin = GCHandle.Alloc(buffer, GCHandleType.Pinned);
+            //IntPtr pinPtr = pin.AddrOfPinnedObject() + offset;
+
+            unsafe
+            {
+                //fixed (byte* pinPtr = buffer)
+				// TODO: should I set position to zero point myself?
+				buffer.Position = 0;
+				byte* pinPtr = buffer.PositionPointer;
+                {
+                    int length;
+                    int safeCount = Math.Min(count, (int)buffer.Capacity);
+                    while (-1 == (length = zmq.send(SocketPtr, (IntPtr)pinPtr, safeCount /* buffer.Length */, (int)flags)))
                     {
                         error = ZError.GetLastErr();
 
@@ -597,6 +646,7 @@ namespace ZeroMQ
 
 			return true;
 		}
+
         public bool ReceiveArrays(ref int framesToReceive,
     ref Queue<byte[]> frames, ZSocketFlags flags, out ZError error)
         {
@@ -1802,6 +1852,5 @@ namespace ZeroMQ
 				throw new ObjectDisposedException(GetType().FullName);
 			}
 		}
-
 	}
 }

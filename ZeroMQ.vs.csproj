@@ -56,6 +56,8 @@
   <ItemGroup>
     <Compile Include="Platform\Platform.__Internal.cs" />
     <Compile Include="UBuffer.cs" />
+    <Compile Include="USub.cs" />
+    <Compile Include="UPub.cs" />
     <Compile Include="ZAuth.cs" />
     <Compile Include="ZCert.cs" />
     <Compile Include="ZCertStore.cs" />

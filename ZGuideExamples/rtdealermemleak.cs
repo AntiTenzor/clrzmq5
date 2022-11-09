@@ -163,7 +163,7 @@ namespace Examples
 
 						byte[] payload = new byte[1 * 1024*1024];
                         //if (!worker.SendBytes(payload, 0, payload.Length, ZSocketFlags.DontWait, out ZError error))
-                        if (!worker.SendBytesUnsafe(payload, ZSocketFlags.DontWait, out ZError error))
+                        if (!worker.SendBytesUnsafe(payload, payload.Length, ZSocketFlags.DontWait, out ZError error))
                         {
                             Console.WriteLine("Что-то пошло не так? {0}", error);
                             throw new InvalidOperationException("Что-то пошло не так? " + error.ToString());
