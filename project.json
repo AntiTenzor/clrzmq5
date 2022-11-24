@@ -1,12 +1,12 @@
 {
     "version": "4.1.0-*",
-    "description": "ZeroMQ/clrzmq4 library",
+    "description": "ZeroMQ/clrzmq5 library",
 
     "dependencies": { },
     "runtimes": {
         "win": { }
     },
     "frameworks": {
-        ".NETFramework,Version=v4.0": {}
+        ".NETFramework,Version=v4.8": {}
     }
 }

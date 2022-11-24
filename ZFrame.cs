@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -15,7 +16,10 @@ namespace ZeroMQ
 	/// </summary>
 	public sealed class ZFrame : Stream, ICloneable
 	{
-		public static ZFrame FromStream(Stream stream, long i, int l)
+		private static readonly byte[] emptyBuffer = new byte[] { };
+        private static readonly System.ArraySegment<byte> emptySegment = new System.ArraySegment<byte>();
+
+        public static ZFrame FromStream(Stream stream, long i, int l)
 		{
 			stream.Position = i;
 			if (l == 0) return new ZFrame();
@@ -340,13 +344,116 @@ namespace ZeroMQ
 			return pos;
 		}
 
-		public byte[] Read()
+		/// <summary>
+		/// read data (de-facto, Frame) in existing buffer
+		/// </summary>
+		/// <param name="ms">memory stream will be created, if (ms == null)</param>
+		/// <returns></returns>
+        public MemoryStream ReadMs(MemoryStream ms)
+        {
+            int remaining = Math.Max(0, (int)(Length - position));
+			if (ms == null)
+				ms = new MemoryStream(remaining + 128);
+			else if (ms.Capacity < remaining)
+				ms.Capacity = remaining + 128;
+
+            return ReadMs(ms, remaining);
+        }
+
+        /// <summary>
+        /// read data (de-facto, Frame) in existing buffer
+        /// </summary>
+        /// <param name="ms">memory stream will be created, if (ms == null)</param>
+        /// <returns></returns>
+        public MemoryStream ReadMs(MemoryStream ms, int remaining)
+        {
+            if (ms == null)
+                ms = new MemoryStream(remaining + 128);
+            else if (ms.Capacity < remaining)
+                ms.Capacity = remaining + 128;
+
+			ms.SetLength(0);
+			byte[] ms_buf = ms.GetBuffer();
+
+			return ReadMs(ms, 0, remaining);
+        }
+
+        /// <summary>
+        /// read data (de-facto, Frame) in existing buffer
+        /// </summary>
+        /// <param name="ms">memory stream will be created, if (ms == null)</param>
+        /// <returns></returns>
+        public MemoryStream ReadMs(MemoryStream ms, int offset, int remaining)
+        {
+            if (ms == null)
+                ms = new MemoryStream(offset + remaining + 128);
+            else if (ms.Capacity < offset + remaining)
+                ms.Capacity = offset + remaining + 128;
+
+            byte[] ms_buf = ms.GetBuffer();
+
+            /* int actualReadBytes = */ Read(ms_buf, offset, remaining);
+			ms.Position += remaining;
+
+			return ms;
+        }
+
+        /// <summary>
+        /// Special overload to get buffer from some external pool of arrays
+        /// </summary>
+        /// <param name="pool">external pool of byte arrays</param>
+        /// <returns>segment of data that was actually read</returns>
+        public System.ArraySegment<byte> ReadSegmentToPool(System.Buffers.ArrayPool<byte> pool)
+        {
+            int remaining = Math.Max(0, (int)(Length - position));
+            //return Read(remaining);
+
+            if (remaining == 0)
+            {
+                //return new byte[0];
+                return emptySegment;
+            }
+            // This condition is never TRUE, because remaining is non-negative!
+            //if (remaining < 0)
+            //{
+            //    return null;
+            //}
+
+            //var bytes = new byte[remaining];
+
+			// This array will be _at_least_ REMAINING bytes
+            byte[] bytes = pool.Rent(remaining);
+
+            /* int bytesLength = */
+            //Read(bytes, 0, remaining);
+
+            Marshal.Copy(DataPtr() + position, bytes, 0, remaining);
+			position += remaining;
+
+			System.ArraySegment<byte> res = new ArraySegment<byte>(bytes, 0, remaining);
+			// res.Array -- Original array under this segment!
+            return res;
+        }
+
+        public byte[] Read()
 		{
 			int remaining = Math.Max(0, (int)(Length - position));
 			return Read(remaining);
 		}
 
-		public byte[] Read(int count)
+        public byte[] Read(ConcurrentBag<byte[]> arrayPool, out int actualCount)
+        {
+            int remaining = Math.Max(0, (int)(Length - position));
+            return Read(arrayPool, remaining, out actualCount);
+        }
+
+        public MemoryStream Read(ConcurrentBag<MemoryStream> streamPool, out int actualCount)
+        {
+            int remaining = Math.Max(0, (int)(Length - position));
+            return Read(streamPool, remaining, out actualCount);
+        }
+
+        public byte[] Read(int count)
 		{
 			int remaining = Math.Min(count, Math.Max(0, (int)(Length - position)));
 			if (remaining == 0)
@@ -362,6 +469,72 @@ namespace ZeroMQ
 			return bytes;
 		}
 
+        public byte[] Read(ConcurrentBag<byte[]> arrayPool, int count, out int actualCount)
+        {
+            int remaining = Math.Min(count, Math.Max(0, (int)(Length - position)));
+            if (remaining == 0)
+            {
+				actualCount = 0;
+                return new byte[0];
+            }
+            if (remaining < 0)
+            {
+				actualCount = remaining;
+                return null;
+            }
+
+			// [2022-11-18] Use array pool to get data
+			// var bytes = new byte[remaining];
+
+			byte[] bytes;
+			if (!arrayPool.TryTake(out bytes))
+				bytes = new byte[remaining + 128];
+			else if (bytes.Length < remaining)
+				Array.Resize(ref bytes, remaining + 128);
+
+
+            /* int bytesLength = */
+            actualCount = Read(bytes, 0, remaining);
+
+            return bytes;
+        }
+
+        public MemoryStream Read(ConcurrentBag<MemoryStream> streamPool, int count, out int actualCount)
+        {
+            int remaining = Math.Min(count, Math.Max(0, (int)(Length - position)));
+            if (remaining == 0)
+            {
+				actualCount = 0;
+                return new MemoryStream();
+            }
+            if (remaining < 0)
+            {
+				actualCount = remaining;
+                return null;
+            }
+
+            // [2022-11-18] Use array pool to get data
+            // var bytes = new byte[remaining];
+
+            MemoryStream ms;
+            if (!streamPool.TryTake(out ms))
+                ms = new MemoryStream(remaining + 128);
+            else if (ms.Capacity < remaining)
+                ms.Capacity = remaining + 128;
+
+			// SetLength clears buffer if trancates
+			//ms.SetLength(0);
+			ms.Position = 0;
+			byte[] bytes = ms.GetBuffer();
+
+            /* int bytesLength = */
+            actualCount = Read(bytes, 0, remaining);
+			ms.Position = actualCount;
+            ms.SetLength(ms.Position);
+
+            return ms;
+        }
+
         /// <summary>
         /// WARNING: this method returns 'remaining', not the amount of bytes received?
         /// </summary>
@@ -376,7 +549,14 @@ namespace ZeroMQ
 			{
 				return -1;
 			}
-			Marshal.Copy(DataPtr() + position, buffer, offset, (int)remaining);
+			//MemoryStream ms = new MemoryStream(buffer);
+			//ms.Capacity = 1000000;
+			//ms.GetBuffer();
+			//ms.SetLength(0);
+
+			//ArraySegment<byte> arrSeg = new ArraySegment<byte>();
+
+            Marshal.Copy(DataPtr() + position, buffer, offset, (int)remaining);
 
 			position += remaining;
 			return remaining;
@@ -767,7 +947,8 @@ namespace ZeroMQ
         /// <summary>
         /// Is it the best way to free resources?
         /// It calls unmanaged msg_close(framePtr)
-        /// and calls framePtr.Dispose().
+        /// and calls framePtr.Dispose()
+		/// and calls Dismiss() also.
         /// </summary>
 		public override void Close()
 		{

@@ -51,7 +51,7 @@ namespace Examples
 					//using (ZMessage zmsg = broker.ReceiveMessage())
 					int maxFramesToGet = 100;
 					frames.Clear();
-					if (broker.ReceiveArrays(ref maxFramesToGet, ref frames, ZSocketFlags.None, out ZError readErr))
+					if (broker.ReceiveArraysQueue(ref maxFramesToGet, ref frames, ZSocketFlags.None, out ZError readErr))
 					{
 						int frameCount = frames.Count;
 						//string id = zmsg.PopString();

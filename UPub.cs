@@ -7,15 +7,15 @@ using System.Diagnostics.Contracts;
 
 namespace ZeroMQ
 {
-    public class UPub
+    public sealed class UPub
     {
-        protected readonly object clrZmqPublisherSyncObj = new object();
-        protected ZSocket clrZmqPublisher;
+        private readonly object clrZmqPublisherSyncObj = new object();
+        private ZSocket clrZmqPublisher;
 
         /// <summary>
         /// Message counter (it counts full message as one, even if it has many frames)
         /// </summary>
-        protected long clrZmqPublishCounter = 0;
+        private long clrZmqPublishCounter = 0;
 
         public readonly string DataPubUrl;
 
@@ -164,6 +164,14 @@ namespace ZeroMQ
         #endregion Send single 'Frame'
 
         #region Send message of many 'Frames'
+        /// <summary>
+        /// Function locks with clrZmqPublisherSyncObj 
+        /// </summary>
+        /// <param name="frames"></param>
+        /// <param name="counts"></param>
+        /// <param name="error"></param>
+        /// <returns></returns>
+        /// <exception cref="InvalidOperationException"></exception>
         public bool SendBytes(List<byte[]> frames, List<int> counts, ref ZError error /*, out Exception zeroEx */)
         {
             //zeroEx = null;
@@ -202,6 +210,14 @@ namespace ZeroMQ
             //return false;
         }
 
+        /// <summary>
+        /// Function locks with clrZmqPublisherSyncObj 
+        /// </summary>
+        /// <param name="frames"></param>
+        /// <param name="counts"></param>
+        /// <param name="error"></param>
+        /// <returns></returns>
+        /// <exception cref="InvalidOperationException"></exception>
         public bool SendUnsafe(List<byte[]> frames, List<int> counts, ref ZError error /*, out Exception zeroEx */)
         {
             //zeroEx = null;
@@ -240,6 +256,14 @@ namespace ZeroMQ
             //return false;
         }
 
+        /// <summary>
+        /// Function locks with clrZmqPublisherSyncObj 
+        /// </summary>
+        /// <param name="frames"></param>
+        /// <param name="counts"></param>
+        /// <param name="error"></param>
+        /// <returns></returns>
+        /// <exception cref="InvalidOperationException"></exception>
         public bool SendUms(List<UnmanagedMemoryStream> frames, List<int> counts, ref ZError error /*, out Exception zeroEx */)
         {
             //zeroEx = null;

@@ -8,6 +8,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ZGuideExamples.vs", "ZGuide
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CiclicPublisher", "CiclicPublisher\CiclicPublisher.csproj", "{8A2B4BE7-FA79-4B7F-887B-7389EA277A05}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CiclicReceiver", "CiclicReceiver\CiclicReceiver.csproj", "{675D59CD-A7D5-4D2B-B4FC-5EFC6F6661BD}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -26,6 +28,10 @@ Global
 		{8A2B4BE7-FA79-4B7F-887B-7389EA277A05}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{8A2B4BE7-FA79-4B7F-887B-7389EA277A05}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{8A2B4BE7-FA79-4B7F-887B-7389EA277A05}.Release|Any CPU.Build.0 = Release|Any CPU
+		{675D59CD-A7D5-4D2B-B4FC-5EFC6F6661BD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{675D59CD-A7D5-4D2B-B4FC-5EFC6F6661BD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{675D59CD-A7D5-4D2B-B4FC-5EFC6F6661BD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{675D59CD-A7D5-4D2B-B4FC-5EFC6F6661BD}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

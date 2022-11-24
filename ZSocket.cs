@@ -541,7 +541,7 @@ namespace ZeroMQ
 			return ReceiveFrames(ref count, ref message, flags, out error);
 		}
 
-		public ZFrame ReceiveFrame()
+        public ZFrame ReceiveFrame()
 		{
 			ZError error;
 			ZFrame frame = ReceiveFrame(out error);
@@ -605,8 +605,8 @@ namespace ZeroMQ
 			return frames;
 		}
 
-		public bool ReceiveFrames<ListT>(ref int framesToReceive, ref ListT frames, ZSocketFlags flags, out ZError error)
-			where ListT : IList<ZFrame>, new()
+		public bool ReceiveFrames<TList>(ref int framesToReceive, ref TList frames, ZSocketFlags flags, out ZError error)
+			where TList : IList<ZFrame>, new()
 		{
 			EnsureNotDisposed();
 
@@ -615,7 +615,7 @@ namespace ZeroMQ
 
 			do
             {
-				var frame = ZFrame.CreateEmpty();
+                ZFrame frame = ZFrame.CreateEmpty();
 
 				if (framesToReceive == 1) 
 				{
@@ -632,23 +632,24 @@ namespace ZeroMQ
 						continue;
 					}
 
+					// Is it the best way to free Frame resources?
+					frame.Close();
 					frame.Dispose();
 					return false;
 				}
 
 				if (frames == null)
 				{
-					frames = new ListT();
+					frames = new TList();
 				}
 				frames.Add(frame);
-
-			} while (--framesToReceive > 0 && this.ReceiveMore);
+            } while (--framesToReceive > 0 && this.ReceiveMore);
 
 			return true;
 		}
 
-        public bool ReceiveArrays(ref int framesToReceive,
-    ref Queue<byte[]> frames, ZSocketFlags flags, out ZError error)
+        public bool ReceiveArraysQueue(ref int framesToReceive,
+			ref Queue<byte[]> frames, ZSocketFlags flags, out ZError error)
         {
             EnsureNotDisposed();
 
@@ -675,6 +676,8 @@ namespace ZeroMQ
                     }
                     else
                     {
+                        // Is it the best way to free Frame resources?
+                        frame.Close();
                         frame.Dispose();
                         return false;
                     }
@@ -689,7 +692,9 @@ namespace ZeroMQ
                 byte[] buf = frame.Read();
                 frames.Enqueue(buf);
 
-                // Free resources??? It looks we should use Close() instead.
+				// Free resources??? It looks we should use Close() instead,
+				// because it calls Dismiss himself
+				frame.Close();
                 frame.Dispose();
             } while (--framesToReceive > 0 && this.ReceiveMore);
 
@@ -739,6 +744,8 @@ namespace ZeroMQ
                             continue;
                         }
 
+                        // Is it the best way to free Frame resources?
+                        frame.Close();
                         frame.Dispose();
                         return false;
                     }
@@ -753,8 +760,76 @@ namespace ZeroMQ
 
                     // Is it the best way to free unmanaged memory?
                     frame.Close();
+                    frame.Dispose();
                 }
             } while (--framesToReceive > 0 && this.ReceiveMore);
+
+            return true;
+        }
+
+
+		public Queue<System.ArraySegment<byte>> ReceivePayloadsToPool(ref Queue<System.ArraySegment<byte>> payloads,
+			System.Buffers.ArrayPool<byte> pool, ZSocketFlags flags, out ZError error)
+		{
+            while (!TryReceivePayloadsToPool(ref payloads, pool, flags, out error))
+            {
+                if (error == ZError.EAGAIN && ((flags & ZSocketFlags.DontWait) == ZSocketFlags.DontWait))
+                {
+                    break;
+                }
+                return null;
+            }
+            return payloads;
+        }
+
+        public bool TryReceivePayloadsToPool(ref Queue<System.ArraySegment<byte>> payloads,
+            System.Buffers.ArrayPool<byte> pool, ZSocketFlags flags, out ZError error)
+        {
+            EnsureNotDisposed();
+
+            error = default(ZError);
+            flags = flags | ZSocketFlags.More;
+
+            if (payloads == null)
+                payloads = new Queue<System.ArraySegment<byte>>(4);
+            else if (payloads.Count > 0)
+                payloads.Clear();
+
+            do
+            {
+                //if (framesToReceive == 1)
+                //{
+                //    flags = flags & ~ZSocketFlags.More;
+                //}
+
+                using (ZFrame frame = ZFrame.CreateEmpty())
+                {
+                    while (-1 == zmq.msg_recv(frame.Ptr, _socketPtr, (int)flags))
+                    {
+                        error = ZError.GetLastErr();
+
+                        if (error == ZError.EINTR)
+                        {
+                            error = default(ZError);
+                            continue;
+                        }
+
+                        // Is it the best way to free Frame resources?
+                        frame.Close();
+                        //frame.Dispose();
+                        return false;
+                    }
+
+                    // Read payload to a regular managed array
+                    System.ArraySegment<byte> payload = frame.ReadSegmentToPool(pool);
+                    payloads.Enqueue(payload);
+
+                    // Is it the best way to free unmanaged memory?
+                    frame.Close();
+                    //frame.Dispose();
+                } // End using (ZFrame frame = ZFrame.CreateEmpty())
+
+            } while (this.ReceiveMore);
 
             return true;
         }
@@ -1845,7 +1920,11 @@ namespace ZeroMQ
 			set { SetOption(ZSocketOption.IPV4_ONLY, value ? 1 : 0); }
 		}
 
-		private void EnsureNotDisposed()
+        /// <summary>
+        /// Make sure that socket is not closed
+        /// </summary>
+        /// <exception cref="ObjectDisposedException">if (_socketPtr == Int.PtrZero)</exception>
+        private void EnsureNotDisposed()
 		{
 			if (_socketPtr == IntPtr.Zero)
 			{

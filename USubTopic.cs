@@ -5,20 +5,20 @@ using System.Text;
 using System.Threading;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Collections.Concurrent;
 
 namespace ZeroMQ
 {
     /// <summary>
     /// This subscriber receives all messages. It does not filter them and it does not trim topic header.
     /// </summary>
-    public sealed class USub
+    public sealed class USubTopic
     {
         private readonly object clrZmqSubscriberSyncObj = new object();
         private ZSocket clrZmqSubscriber;
         private long clrZmqReceivedCounter = 0;
 
         public readonly ReadOnlyCollection<string> DataPubUrls;
+        private readonly byte[] subscriptionTopic;
 
         private readonly object syncObj4Connect = new object();
         /// <summary>
@@ -31,15 +31,7 @@ namespace ZeroMQ
 
         private Thread readThread;
 
-        public readonly System.Buffers.ArrayPool<byte> arrayPool = System.Buffers.ArrayPool<byte>.Create(UInt16.MaxValue, 17);
-        private readonly ConcurrentBag<byte[]> byteBufferPool = new ConcurrentBag<byte[]>();
-        private readonly ConcurrentBag<MemoryStream> memBufferPool = new ConcurrentBag<MemoryStream>();
-
-        public delegate void MessageReceivedDelegate(USub sender, Queue<System.ArraySegment<byte>> payloads);
-
-        public event MessageReceivedDelegate OnRawMessageReceived;
-
-        public USub(IList<string> dataPubUrls)
+        public USubTopic(IList<string> dataPubUrls, byte[] topic)
         {
             if ((dataPubUrls == null) || (dataPubUrls.Count <= 0))
                 throw new ArgumentNullException("dataPubUrls", "#1 Please, provide reasonable publisher URL i.e. 'tcp://*:54321'");
@@ -49,6 +41,14 @@ namespace ZeroMQ
                     throw new ArgumentNullException("dataPubUrls", "#3 Please, provide reasonable publisher URL i.e. 'tcp://*:54321'");
             }
 
+            if (topic == null)
+                subscriptionTopic = new byte[] { };
+            else
+            {
+                subscriptionTopic = new byte[topic.Length];
+                Array.Copy(topic, 0, subscriptionTopic, 0, topic.Length);
+            }
+
             this.DataPubUrls = new ReadOnlyCollection<string>(new List<string>(dataPubUrls));
 
             ZSocket sub = PrepareSocketSub();
@@ -56,28 +56,8 @@ namespace ZeroMQ
             lock (clrZmqSubscriberSyncObj)
             {
                 clrZmqSubscriber = sub;
-
-                byteBufferPool.Add(new byte[256]);
-                memBufferPool.Add(new MemoryStream(256));
             }
         }
-
-        public void ReturnToPool(byte[] buf)
-        {
-            if (buf == null)
-                return;
-
-            byteBufferPool.Add(buf);
-        }
-
-        public void ReturnToPool(MemoryStream ms)
-        {
-            if (ms == null)
-                return;
-
-            memBufferPool.Add(ms);
-        }
-
 
         /// <summary>
         /// Message counter (it counts full message as one, even if it has many frames)
@@ -176,9 +156,7 @@ namespace ZeroMQ
                     }
                     //Log.Warning("[{Alias}] Connected to primaryUrl '{primaryUrl}'!", Alias, primaryUrl);
 
-                    // Subscribe to all messages without topic filtering
-                    //clrZmqSubscriber.Subscribe(new byte[] { });
-                    clrZmqSubscriber.Subscribe(new byte[] { (byte)7 });
+                    clrZmqSubscriber.Subscribe(subscriptionTopic);
 
                     //onDataPortalConnected();
 
@@ -237,30 +215,22 @@ namespace ZeroMQ
             //Log.Error("[{Alias}] Starting execution of the most-important method '{1}'...", Alias, nameof(ReadThreadImpl));
 
             int sehExCounter = 0;
-
-            Queue<System.ArraySegment<byte>> payloads = null;
-
             while (!gateStopped.WaitOne(0, false))
             {
                 try
                 {
                     byte[] buf = null;
-                    int actualByteCount = 0;
                     try
                     {
                         // Timeout is configured in milliseconds
                         ZError error;
-                        //using (ZFrame frame = clrZmqSubscriber.ReceiveFrame(out error))
-
-                        payloads = clrZmqSubscriber.ReceivePayloadsToPool(ref payloads, arrayPool, ZSocketFlags.None, out error);
-                        if (error != null)
+                        using (ZFrame frame = clrZmqSubscriber.ReceiveFrame(out error))
                         {
-                            //if (frame != null)
-                            //{
-                            //    //buf = frame.Read();
-                            //    buf = frame.Read(byteBufferPool, out actualByteCount);
-                            //}
-                            if (error.Number == ZError.EAGAIN.Number)
+                            if (frame != null)
+                            {
+                                buf = frame.Read();
+                            }
+                            else if (error.Number == ZError.EAGAIN.Number)
                             {
                                 // Скорее всего приложение на той стороне выключено и теперь мы об этом знаем!
                                 //Log.Warning("[{Alias}] Паблишер на той стороне выключен? num:{errorNumber}; name:{errorName}; text: {errorText}",
@@ -282,36 +252,17 @@ namespace ZeroMQ
                         if (sehExCounter > 1)
                         {
                             // Log.Error(zex, "[{Alias}] Исключение при чтении сообщения ZMQ.", Alias);
-                        }
-
-                        if (buf != null)
-                            byteBufferPool.Add(buf);
+                         }
 
                         buf = null;
                         sehExCounter++;
                     }
 
-                    //if ((buf == null) || (buf.Length <= 0))
-                    //    continue;
-
-                    if ((payloads == null) || (payloads.Count <= 0))
+                    if ((buf == null) || (buf.Length <= 0))
                         continue;
 
-                    // TODO: По идее, это всё добро нужно откинуть в отдельный поток и публиковать уже из него, чтобы не блокировать вычитку
-                    try
-                    {
-                        if (OnRawMessageReceived != null)
-                            OnRawMessageReceived(this, payloads);
-                    }
-                    catch (Exception eventEx)
-                    {
-                        // TODO: Нехорошо... Залоггировать?
-                    }
-
                     //string results = Encoding.ASCII.GetString(buf);
-                    //string results = Encoding.UTF8.GetString(buf, 0, actualByteCount);
-                    //ReturnToPool(buf);
-
+                    string results = Encoding.UTF8.GetString(buf);
                     //Log.DebugFormat("[{0}] {1}", Alias, results);
 
                     // DERIBIT;BTC-PERPETUAL;T;58297.5;3960.0;sell;2021-04-10 01:10:42.383374
@@ -321,7 +272,6 @@ namespace ZeroMQ
                     //if (split.Length < 3)
                     //    continue;
                     
-
                 }
                 catch (ThreadAbortException) { }
                 catch (ThreadInterruptedException) { }
@@ -345,7 +295,7 @@ namespace ZeroMQ
 
                 //Log.Warning("[{Alias}] Unsibscribing from '{primaryUrl}'...", Alias, primaryUrl);
                 //clrZmqSubscriber.Unsubscribe(new byte[] { })
-                clrZmqSubscriber.Unsubscribe(new byte[] { });
+                clrZmqSubscriber.Unsubscribe(subscriptionTopic);
 
                 //Log.Warning("[{Alias}] Disposing '{clrZmqSubscriber}'...", Alias, nameof(clrZmqSubscriber));
                 clrZmqSubscriber.Dispose();
